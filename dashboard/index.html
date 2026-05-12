@@ -350,7 +350,7 @@
   .content {
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto;
     background: var(--bg);
   }
 
@@ -414,8 +414,9 @@
   }
 
   /* Content body */
-  .content-body {
+.content-body {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: 24px 28px;
     display: grid;
@@ -431,7 +432,7 @@
     background: var(--bg2);
     border: 1px solid var(--border);
     border-radius: 8px;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .panel.full-width { grid-column: 1 / -1; }
@@ -752,8 +753,9 @@
 
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .alert-banner {
-    margin: 0 28px 16px;
+.alert-banner {
+    margin: 16px 28px 0;
+    flex-shrink: 0;
     padding: 12px 16px;
     border-radius: 6px;
     border-left: 4px solid var(--critical);
@@ -846,10 +848,10 @@
     <div id="emptyState" class="empty-state">
       <div class="empty-icon">📡</div>
       <div class="empty-text">No patient selected<br>Run an assessment to see<br>AI-powered risk analysis</div>
-      <div class="empty-hint">Powered by NEWS2 · Grok LLM · FHIR R4 · SHARP</div>
+      <div class="empty-hint">Powered by NEWS2 · Groq LLM · FHIR R4 · SHARP</div>
     </div>
 
-    <div id="patientView" style="display:none; flex-direction:column; height:100%;">
+    <div id="patientView" style="display:none; height:100%;">
       <div class="content-header" id="contentHeader">
         <!-- filled by JS -->
       </div>
@@ -1077,7 +1079,7 @@
 
     document.getElementById('emptyState').style.display = 'none';
     const view = document.getElementById('patientView');
-    view.style.display = 'flex';
+    view.style.cssText = 'display:flex; flex-direction:column; min-height:100%;';
 
     const color = RISK_COLORS[data.riskLevel];
     const news2Pct = Math.min((data.news2Score / 20) * 100, 100);
@@ -1108,7 +1110,7 @@
         <div class="tech-tags">
           <span class="tech-tag tag-fhir">FHIR R4</span>
           <span class="tech-tag tag-news2">NEWS2</span>
-          <span class="tech-tag tag-ai">Grok LLM</span>
+          <span class="tech-tag tag-ai">Groq LLM</span>
           <span class="tech-tag tag-sharp">SHARP</span>
           <span class="tech-tag" style="background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.3);">A2A READY</span>
         </div>
@@ -1155,7 +1157,7 @@
       <div class="panel">
         <div class="panel-header">
           <span class="panel-title">AI Clinical Reasoning</span>
-          <span class="panel-tag tag-ai">GROK LLM</span>
+          <span class="panel-tag tag-ai">GROQ LLM</span>
         </div>
         <div class="panel-body">
           <div class="narrative-text">${data.llmNarrative}</div>

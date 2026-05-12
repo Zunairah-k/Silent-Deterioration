@@ -1,8 +1,8 @@
 import axios from "axios";
 import { RiskAssessment } from "./riskEngine";
 
-const GROK_API_URL = "https://api.x.ai/v1/chat/completions";
-const GROK_MODEL = "grok-3-mini";
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";  
+const GROQ_MODEL = "llama-3.3-70b-versatile"; 
 
 export interface LLMEnrichedAssessment {
   originalAssessment: RiskAssessment;
@@ -22,9 +22,9 @@ export async function enrichAssessmentWithLLM(
 
   try {
     const response = await axios.post(
-      GROK_API_URL,
+      GROQ_API_URL,
       {
-        model: GROK_MODEL,
+        model: GROQ_MODEL,
         messages: [
           {
             role: "system",
@@ -60,7 +60,7 @@ Always respond in valid JSON only — no markdown, no preamble.`,
       differentialDiagnoses: parsed.differentialDiagnoses ?? [],
       urgencyJustification: parsed.urgencyJustification ?? "",
       nextSteps: parsed.nextSteps ?? [],
-      llmModel: GROK_MODEL,
+      llmModel: GROQ_MODEL,
       enrichedAt: new Date().toISOString(),
     };
   } catch (err: any) {

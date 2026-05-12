@@ -96,7 +96,7 @@
   "marketplace": {
     "displayName": "Silent Deterioration Monitor",
     "shortDescription": "AI-powered early warning system that detects patients silently trending toward crisis using FHIR vitals, labs, NEWS2, and cross-parameter pattern recognition.",
-    "longDescription": "Traditional early warning systems use simple threshold rules — if heart rate > X, alert. But patients deteriorate silently when multiple parameters are each 'borderline normal' while their combined trajectory signals crisis. This agent uses AI to detect those patterns: sepsis triad, cardiorenal syndrome, respiratory-hemodynamic coupling, and more. Built on FHIR R4, NEWS2 (NHS gold standard), Grok LLM reasoning, and SHARP context propagation for seamless A2A integration.",
+    "longDescription": "Traditional early warning systems use simple threshold rules — if heart rate > X, alert. But patients deteriorate silently when multiple parameters are each 'borderline normal' while their combined trajectory signals crisis. This agent uses AI to detect those patterns: sepsis triad, cardiorenal syndrome, respiratory-hemodynamic coupling, and more. Built on FHIR R4, NEWS2 (NHS gold standard), Groq LLM reasoning, and SHARP context propagation for seamless A2A integration.",
     "useCases": [
       "ICU continuous monitoring",
       "Ward nurse handover — who needs attention first",

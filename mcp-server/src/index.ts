@@ -1,5 +1,4 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import * as dotenv from "dotenv";
 import { getPatientSummary, getPatientVitals, getLabResults } from "./fhirClient.js";
@@ -9,7 +8,7 @@ import { buildSHARPEnvelope } from "./sharpAdapter.js";
 
 dotenv.config();
 
-const GROK_API_KEY = process.env.GROK_API_KEY ?? "";
+const GROQ_API_KEY = process.env.GROQ_API_KEY ?? "";
 
 const server = new McpServer({
   name: "silent-deterioration",
@@ -96,22 +95,25 @@ server.tool(
       ]);
 
       const assessment = assessDeteriorationRisk(patient, vitals, labs);
+      const enriched = await enrichAssessmentWithLLM(assessment, GROQ_API_KEY);
 
-      const output: any = {
-        success: true,
-        sharpContext: assessment.sharpContext,   // SHARP-compliant for Prompt Opinion
-        riskScore: assessment.riskScore,
-        riskLevel: assessment.riskLevel,
-        patientName: assessment.patientName,
-        aiReasoning: assessment.aiReasoning,
-        clinicalSignals: assessment.clinicalSignals,
-        fhirResourceRefs: assessment.fhirResourceRefs,
-        assessedAt: assessment.assessedAt,
-      };
-
-      if (includeRecommendations) {
-        output.recommendedActions = assessment.recommendedActions;
-      }
+const output: any = {
+  success: true,
+  sharpContext: assessment.sharpContext,
+  riskScore: assessment.riskScore,
+  riskLevel: assessment.riskLevel,
+  patientName: assessment.patientName,
+  llmNarrative: enriched.llmNarrative,           // ADD
+  differentialDiagnoses: enriched.differentialDiagnoses, // ADD
+  urgencyJustification: enriched.urgencyJustification,   // ADD
+  clinicalSignals: assessment.clinicalSignals,
+  fhirResourceRefs: assessment.fhirResourceRefs,
+  assessedAt: assessment.assessedAt,
+  llmModel: enriched.llmModel,                   // ADD
+};
+if (includeRecommendations) {
+  output.recommendedActions = enriched.nextSteps ?? assessment.recommendedActions; // prefer LLM actions
+}
 
       return {
         content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
@@ -190,13 +192,81 @@ server.tool(
 );
 
 // ─── Start Server ─────────────────────────────────────────────────────────────
+import * as http from "http";
+import * as readline from "readline";
+
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("🏥 Silent Deterioration MCP Server running");
-  console.error("📡 Connected to FHIR R4 endpoint");
-  console.error("🧠 NEWS2 + AI cross-parameter detection ready");
-  console.error("✅ SHARP context propagation enabled");
+  const args = process.argv.slice(2);
+  const useHttp = args.includes("--http");
+  const portArg = args.find(a => a.startsWith("--port="));
+  const port = portArg ? parseInt(portArg.split("=")[1]) : 3001;
+
+  if (useHttp) {
+    // HTTP/SSE transport for Prompt Opinion platform
+    const { SSEServerTransport } = await import("@modelcontextprotocol/sdk/server/sse.js");
+    
+    const transports: Record<string, any> = {};
+
+    const httpServer = http.createServer(async (req, res) => {
+      // CORS headers
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      
+      if (req.method === "OPTIONS") {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
+      if (req.url === "/sse" && req.method === "GET") {
+        const transport = new SSEServerTransport("/messages", res);
+        transports[transport.sessionId] = transport;
+        await server.connect(transport);
+        transport.onclose = () => delete transports[transport.sessionId];
+        return;
+      }
+
+      if (req.url?.startsWith("/messages") && req.method === "POST") {
+        const sessionId = new URL(req.url, `http://localhost`).searchParams.get("sessionId");
+        const transport = sessionId ? transports[sessionId] : null;
+        if (transport) {
+          await transport.handlePostMessage(req, res);
+        } else {
+          res.writeHead(404);
+          res.end("Session not found");
+        }
+        return;
+      }
+
+      // Health check
+      if (req.url === "/health") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ status: "ok", server: "silent-deterioration-mcp", version: "1.0.0" }));
+        return;
+      }
+
+      res.writeHead(404);
+      res.end("Not found");
+    });
+
+    httpServer.listen(port, () => {
+      console.error(`🏥 Silent Deterioration MCP Server running (HTTP mode)`);
+      console.error(`📡 SSE endpoint: http://localhost:${port}/sse`);
+      console.error(`🧠 NEWS2 + AI cross-parameter detection ready`);
+      console.error(`✅ SHARP context propagation enabled`);
+    });
+
+  } else {
+    // Default: stdio transport (for local testing)
+    const { StdioServerTransport } = await import("@modelcontextprotocol/sdk/server/stdio.js");
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("🏥 Silent Deterioration MCP Server running");
+    console.error("📡 Connected to FHIR R4 endpoint");
+    console.error("🧠 NEWS2 + AI cross-parameter detection ready");
+    console.error("✅ SHARP context propagation enabled");
+  }
 }
 
 main().catch((err) => {
