@@ -1,0 +1,111 @@
+{
+  "agentManifest": {
+    "id": "silent-deterioration-agent-v1",
+    "name": "Silent Deterioration Monitor",
+    "version": "1.0.0",
+    "description": "An A2A healthcare agent that proactively monitors patients for silent clinical deterioration. Uses FHIR R4 data, NEWS2 scoring, and AI cross-parameter pattern detection to catch what rule-based systems miss — the patients who look stable individually but are trending toward crisis.",
+    "category": "clinical-monitoring",
+    "tags": ["deterioration", "ICU", "patient-safety", "NEWS2", "sepsis", "FHIR", "real-time"],
+    "author": "Silent Deterioration Team",
+    "license": "MIT"
+  },
+
+  "a2aConfig": {
+    "protocol": "A2A/1.0",
+    "communicationMode": "request-response",
+    "supportsStreaming": false,
+    "supportsAsyncCallback": true,
+    "maxConcurrentRequests": 10
+  },
+
+  "mcpIntegration": {
+    "serverName": "silent-deterioration",
+    "transport": "stdio",
+    "command": "node",
+    "args": ["dist/index.js"],
+    "workingDirectory": "./mcp-server",
+    "tools": [
+      "get_patient_vitals",
+      "get_lab_results",
+      "assess_deterioration_risk",
+      "scan_ward_for_deterioration",
+      "build_sharp_context"
+    ]
+  },
+
+  "sharpConfig": {
+    "contextTypes": ["deterioration-alert"],
+    "fhirVersion": "R4",
+    "fhirBaseUrl": "https://hapi.fhir.org/baseR4",
+    "propagatesContext": true,
+    "consumesContext": true,
+    "requiredScopes": ["Patient.read", "Observation.read", "Condition.read"],
+    "contextTTLMinutes": 60
+  },
+
+  "agentCard": {
+    "capabilities": [
+      {
+        "name": "Patient Deterioration Assessment",
+        "description": "Full AI risk assessment for a single patient — NEWS2 + LLM reasoning + SHARP output",
+        "inputSchema": {
+          "patientId": "string (FHIR Patient ID)",
+          "useLLM": "boolean (default: true)",
+          "sessionId": "string (optional, for A2A chaining)"
+        },
+        "outputSchema": {
+          "riskScore": "number 0-100",
+          "riskLevel": "LOW | MODERATE | HIGH | CRITICAL",
+          "llmNarrative": "string",
+          "differentialDiagnoses": "string[]",
+          "recommendedActions": "string[]",
+          "sharpEnvelope": "SHARPEnvelope"
+        },
+        "mcpTool": "assess_deterioration_risk"
+      },
+      {
+        "name": "Ward Scan",
+        "description": "Scan up to 10 patients simultaneously, ranked by risk. For handover and rounds.",
+        "inputSchema": {
+          "patientIds": "string[] (FHIR Patient IDs, max 10)"
+        },
+        "outputSchema": {
+          "wardSummary": "object",
+          "priorityRanking": "array sorted by riskScore descending"
+        },
+        "mcpTool": "scan_ward_for_deterioration"
+      },
+      {
+        "name": "SHARP Context Builder",
+        "description": "Builds a SHARP envelope from patient data for downstream A2A agent consumption",
+        "mcpTool": "build_sharp_context"
+      }
+    ],
+
+    "examplePrompts": [
+      "Check if patient 592011 is deteriorating",
+      "Scan ward patients 592011, 592012, 592013 and rank by risk",
+      "Build a SHARP context for patient 592011 in session abc-123",
+      "What are the latest vitals for patient 592012?",
+      "Is there a sepsis pattern in patient 592011?"
+    ],
+
+    "systemPrompt": "You are a clinical AI monitoring agent. Your primary role is to detect silent patient deterioration before it becomes a crisis. You use FHIR data, validated clinical scoring (NEWS2), and multi-parameter AI pattern recognition to identify patients who look stable individually but whose combined signals suggest imminent deterioration. You always prioritize patient safety. When risk is HIGH or CRITICAL, you lead with the most urgent action. You communicate clearly to busy clinicians — no jargon, no hedging, direct actionable output."
+  },
+
+  "marketplace": {
+    "displayName": "Silent Deterioration Monitor",
+    "shortDescription": "AI-powered early warning system that detects patients silently trending toward crisis using FHIR vitals, labs, NEWS2, and cross-parameter pattern recognition.",
+    "longDescription": "Traditional early warning systems use simple threshold rules — if heart rate > X, alert. But patients deteriorate silently when multiple parameters are each 'borderline normal' while their combined trajectory signals crisis. This agent uses AI to detect those patterns: sepsis triad, cardiorenal syndrome, respiratory-hemodynamic coupling, and more. Built on FHIR R4, NEWS2 (NHS gold standard), Grok LLM reasoning, and SHARP context propagation for seamless A2A integration.",
+    "useCases": [
+      "ICU continuous monitoring",
+      "Ward nurse handover — who needs attention first",
+      "Post-op deterioration surveillance",
+      "ED triage augmentation",
+      "Rapid response team trigger support"
+    ],
+    "clinicalEvidence": "NEWS2 score validated by NHS England across 250,000+ patient episodes. Sepsis-3 criteria endorsed by SCCM/ESICM.",
+    "dataRequirements": "FHIR R4 Patient + Observation resources (vitals + labs). Works with HAPI FHIR, Epic FHIR, Cerner FHIR.",
+    "privacyNote": "Demo uses public HAPI FHIR sandbox. Production deployments should use institution FHIR endpoints with appropriate OAuth2/SMART-on-FHIR authentication."
+  }
+}

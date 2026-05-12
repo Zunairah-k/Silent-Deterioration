@@ -1,0 +1,27 @@
+{
+  "comment": "Sample FHIR R4 patient IDs from public HAPI sandbox for demo",
+  "patients": [
+    {
+      "id": "592011",
+      "label": "High Risk — Sepsis Pattern",
+      "description": "67yo male, diabetes + hypertension. Tachycardia, elevated WBC, high CRP, borderline BP.",
+      "expectedRiskLevel": "CRITICAL"
+    },
+    {
+      "id": "592012",
+      "label": "Moderate Risk — AKI",
+      "description": "54yo female, CKD. Rising creatinine, low BP trend.",
+      "expectedRiskLevel": "HIGH"
+    },
+    {
+      "id": "592013",
+      "label": "Low Risk — Stable",
+      "description": "42yo male, post-op day 2. Vitals normalizing.",
+      "expectedRiskLevel": "LOW"
+    }
+  ],
+  "note": "If HAPI FHIR returns no data for these IDs, the system falls back to synthetic data that demonstrates the full deterioration detection pipeline. This is by design — the demo always works.",
+  "syntheticDemoPatientId": "demo-patient-001",
+  "fhirVersion": "R4",
+  "fhirBase": "https://hapi.fhir.org/baseR4"
+}

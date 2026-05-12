@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Silent Deterioration Monitor — Clinical AI Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #070b0f;
+    --bg2: #0d1117;
+    --bg3: #131920;
+    --border: #1e2d3d;
+    --border2: #243447;
+    --text: #c9d1d9;
+    --text2: #8b949e;
+    --text3: #484f58;
+    --accent: #00d4ff;
+    --accent2: #0096b3;
+    --critical: #ff4757;
+    --high: #ff6b35;
+    --moderate: #ffa502;
+    --low: #2ed573;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,212,255,0.015) 2px, rgba(0,212,255,0.015) 4px);
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 36px;
+    height: 36px;
+    border: 2px solid var(--accent);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .logo-icon::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(0,212,255,0.15), transparent);
+  }
+
+  .logo-text {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+  }
+
+  .logo-sub {
+    font-size: 10px;
+    color: var(--text3);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .header-status {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--bg3);
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--low);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .fhir-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    background: rgba(0,212,255,0.1);
+    color: var(--accent);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+  }
+
+  /* Main layout */
+  .main {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    height: calc(100vh - 73px);
+  }
+
+  /* Sidebar */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    background: var(--bg2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .sidebar-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .sidebar-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text2);
+  }
+
+  .scan-btn {
+    background: rgba(0,212,255,0.1);
+    border: 1px solid rgba(0,212,255,0.4);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+
+  .scan-btn:hover {
+    background: rgba(0,212,255,0.2);
+    border-color: var(--accent);
+  }
+
+  .scan-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* Patient input */
+  .patient-input-area {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .input-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .patient-id-input {
+    flex: 1;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .patient-id-input:focus {
+    border-color: var(--accent);
+  }
+
+  .assess-btn {
+    background: var(--accent);
+    border: none;
+    color: var(--bg);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    letter-spacing: 0.03em;
+  }
+
+  .assess-btn:hover { background: #00f0ff; }
+  .assess-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Patient list */
+  .patient-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+
+  .patient-list::-webkit-scrollbar { width: 4px; }
+  .patient-list::-webkit-scrollbar-track { background: transparent; }
+  .patient-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .patient-card {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+  }
+
+  .patient-card:hover { background: var(--bg3); }
+  .patient-card.active { background: rgba(0,212,255,0.06); border-right: 2px solid var(--accent); }
+
+  .patient-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  .patient-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .risk-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .risk-CRITICAL { background: rgba(255,71,87,0.15); color: var(--critical); border: 1px solid rgba(255,71,87,0.4); }
+  .risk-HIGH { background: rgba(255,107,53,0.15); color: var(--high); border: 1px solid rgba(255,107,53,0.4); }
+  .risk-MODERATE { background: rgba(255,165,2,0.15); color: var(--moderate); border: 1px solid rgba(255,165,2,0.4); }
+  .risk-LOW { background: rgba(46,213,115,0.15); color: var(--low); border: 1px solid rgba(46,213,115,0.4); }
+
+  .patient-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+  }
+
+  .score-bar-wrap {
+    margin-top: 8px;
+    background: var(--bg);
+    border-radius: 2px;
+    height: 3px;
+    overflow: hidden;
+  }
+
+  .score-bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.6s ease;
+  }
+
+  /* Loading state */
+  .loading-card {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .skeleton {
+    background: linear-gradient(90deg, var(--bg3) 25%, var(--border) 50%, var(--bg3) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 3px;
+    height: 12px;
+    margin-bottom: 8px;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Main content */
+  .content {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  .content-header {
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .patient-headline {
+    flex: 1;
+  }
+
+  .patient-full-name {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+
+  .patient-details-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+  }
+
+  .detail-chip {
+    padding: 2px 8px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+  }
+
+  .risk-meter {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+
+  .risk-score-big {
+    font-family: var(--mono);
+    font-size: 42px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  .risk-label-big {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  /* Content body */
+  .content-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 28px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    align-content: start;
+  }
+
+  .content-body::-webkit-scrollbar { width: 4px; }
+  .content-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .panel {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .panel.full-width { grid-column: 1 / -1; }
+
+  .panel-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg3);
+  }
+
+  .panel-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text2);
+  }
+
+  .panel-tag {
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+  }
+
+  .tag-ai { background: rgba(0,212,255,0.1); color: var(--accent); border: 1px solid rgba(0,212,255,0.3); }
+  .tag-fhir { background: rgba(46,213,115,0.1); color: var(--low); border: 1px solid rgba(46,213,115,0.3); }
+  .tag-sharp { background: rgba(255,165,2,0.1); color: var(--moderate); border: 1px solid rgba(255,165,2,0.3); }
+  .tag-news2 { background: rgba(255,107,53,0.1); color: var(--high); border: 1px solid rgba(255,107,53,0.3); }
+
+  .panel-body { padding: 16px; }
+
+  /* Signals grid */
+  .signals-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .signal-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 5px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    transition: border-color 0.2s;
+  }
+
+  .signal-row.critical { border-color: rgba(255,71,87,0.4); background: rgba(255,71,87,0.05); }
+  .signal-row.abnormal { border-color: rgba(255,107,53,0.3); background: rgba(255,107,53,0.04); }
+  .signal-row.borderline { border-color: rgba(255,165,2,0.3); }
+
+  .signal-name {
+    font-size: 12px;
+    font-weight: 500;
+    min-width: 130px;
+    color: var(--text);
+  }
+
+  .signal-value {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    min-width: 80px;
+  }
+
+  .signal-status {
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-left: auto;
+  }
+
+  /* Patterns */
+  .pattern-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .pattern-item {
+    padding: 12px 14px;
+    border-radius: 5px;
+    border-left: 3px solid var(--critical);
+    background: rgba(255,71,87,0.06);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  .pattern-item.moderate {
+    border-left-color: var(--moderate);
+    background: rgba(255,165,2,0.06);
+  }
+
+  /* LLM narrative */
+  .narrative-text {
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text);
+    margin-bottom: 14px;
+  }
+
+  .differential-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .diff-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--text2);
+  }
+
+  .diff-num {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    min-width: 20px;
+  }
+
+  /* Actions */
+  .actions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .action-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 5px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text);
+  }
+
+  .action-idx {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    min-width: 16px;
+    padding-top: 1px;
+  }
+
+  /* SHARP panel */
+  .sharp-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .sharp-field {
+    padding: 8px 10px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+
+  .sharp-key {
+    font-family: var(--mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text3);
+    margin-bottom: 3px;
+  }
+
+  .sharp-val {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    word-break: break-all;
+  }
+
+  /* NEWS2 meter */
+  .news2-display {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .news2-number {
+    font-family: var(--mono);
+    font-size: 48px;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .news2-scale {
+    flex: 1;
+  }
+
+  .news2-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+    margin-bottom: 10px;
+  }
+
+  .news2-bar-track {
+    height: 8px;
+    background: var(--bg);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .news2-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .news2-markers {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text3);
+  }
+
+  /* Empty state */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 16px;
+    color: var(--text3);
+  }
+
+  .empty-icon {
+    font-size: 48px;
+    opacity: 0.3;
+  }
+
+  .empty-text {
+    font-family: var(--mono);
+    font-size: 13px;
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  .empty-hint {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: var(--mono);
+  }
+
+  /* Demo patients */
+  .demo-patients {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .demo-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text3);
+    margin-bottom: 8px;
+  }
+
+  .demo-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .demo-chip {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 4px 8px;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 3px;
+    cursor: pointer;
+    color: var(--text2);
+    transition: all 0.15s;
+  }
+
+  .demo-chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,212,255,0.06);
+  }
+
+  /* Spinner */
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .alert-banner {
+    margin: 0 28px 16px;
+    padding: 12px 16px;
+    border-radius: 6px;
+    border-left: 4px solid var(--critical);
+    background: rgba(255,71,87,0.08);
+    font-size: 13px;
+    color: var(--text);
+    display: none;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Tag row in header */
+  .tech-tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+
+  .tech-tag {
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">
+    <div class="logo-icon">🏥</div>
+    <div>
+      <div class="logo-text">SILENT DETERIORATION MONITOR</div>
+      <div class="logo-sub">Healthcare AI · MCP + A2A + FHIR R4 + SHARP</div>
+    </div>
+  </div>
+  <div class="header-status">
+    <div class="status-pill">
+      <div class="status-dot"></div>
+      MCP ONLINE
+    </div>
+    <div class="fhir-badge">FHIR R4</div>
+    <div class="fhir-badge" style="color:var(--moderate);border-color:rgba(255,165,2,0.3);background:rgba(255,165,2,0.1);">SHARP</div>
+    <div class="fhir-badge" style="color:var(--low);border-color:rgba(46,213,115,0.3);background:rgba(46,213,115,0.1);">A2A</div>
+  </div>
+</header>
+
+<div class="main">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Patient Queue</span>
+      <button class="scan-btn" id="scanBtn" onclick="scanWard()">⚡ SCAN WARD</button>
+    </div>
+
+    <div class="patient-input-area">
+      <div class="input-label">FHIR Patient ID</div>
+      <div class="input-row">
+        <input class="patient-id-input" id="patientIdInput" type="text" placeholder="e.g. 592011" />
+        <button class="assess-btn" id="assessBtn" onclick="assessPatient()">ASSESS</button>
+      </div>
+    </div>
+
+    <div class="demo-patients">
+      <div class="demo-label">Quick Demo Patients</div>
+      <div class="demo-chips">
+        <div class="demo-chip" onclick="loadDemo('demo-critical', 'CRITICAL')">🔴 CRITICAL</div>
+        <div class="demo-chip" onclick="loadDemo('demo-high', 'HIGH')">🟠 HIGH RISK</div>
+        <div class="demo-chip" onclick="loadDemo('demo-moderate', 'MODERATE')">🟡 MODERATE</div>
+        <div class="demo-chip" onclick="loadDemo('demo-low', 'LOW')">🟢 STABLE</div>
+      </div>
+    </div>
+
+    <div class="patient-list" id="patientList">
+      <div style="padding: 24px 20px; text-align:center; color: var(--text3); font-family: var(--mono); font-size: 11px; line-height: 1.7;">
+        Enter a FHIR patient ID<br>or use demo patients above<br>to begin monitoring
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="content">
+    <div id="emptyState" class="empty-state">
+      <div class="empty-icon">📡</div>
+      <div class="empty-text">No patient selected<br>Run an assessment to see<br>AI-powered risk analysis</div>
+      <div class="empty-hint">Powered by NEWS2 · Grok LLM · FHIR R4 · SHARP</div>
+    </div>
+
+    <div id="patientView" style="display:none; flex-direction:column; height:100%;">
+      <div class="content-header" id="contentHeader">
+        <!-- filled by JS -->
+      </div>
+      <div id="alertBanner" class="alert-banner"></div>
+      <div class="content-body" id="contentBody">
+        <!-- filled by JS -->
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  // Demo data — realistic synthetic patients showing different risk profiles
+  const DEMO_PATIENTS = {
+    'demo-critical': {
+      patientId: 'demo-critical',
+      patientName: 'James Harrington',
+      riskScore: 87,
+      riskLevel: 'CRITICAL',
+      news2Score: 11,
+      llmNarrative: 'Mr. Harrington presents with a classic sepsis triad: tachycardia (HR 118), tachypnea (RR 26), and leukocytosis (WBC 18.4). Combined with hypotension (SBP 88), elevated creatinine (2.8 mg/dL), and markedly elevated CRP (142 mg/L), this picture is consistent with septic shock with early multi-organ involvement. The concurrent SpO2 of 91% indicates respiratory compromise compounding hemodynamic instability.',
+      differentialDiagnoses: ['Septic shock (gram-negative bacteremia)', 'Pneumonia with sepsis', 'Urosepsis with AKI'],
+      urgencyJustification: 'Risk score 87/100 reflects concurrent hemodynamic compromise, end-organ dysfunction, and systemic inflammation meeting Sepsis-3 criteria.',
+      recommendedActions: [
+        '🚨 IMMEDIATE: Notify rapid response team / attending physician NOW',
+        'Draw blood cultures x2, urine culture',
+        'Initiate Sepsis-3 protocol — broad-spectrum antibiotics within 1 hour',
+        'IV fluid resuscitation 30mL/kg (1.8L for 60kg patient)',
+        'Apply supplemental O2 — titrate to SpO2 ≥95%',
+        'Strict fluid balance monitoring every 1 hour',
+        'Lactate level STAT',
+        'STAT EKG — potassium 5.8 mEq/L'
+      ],
+      clinicalSignals: [
+        { parameter: 'Heart Rate', value: '118 bpm', status: 'critical', reasoning: 'NEWS2 score contribution: 2 pts — tachycardia' },
+        { parameter: 'Respiratory Rate', value: '26 breaths/min', status: 'critical', reasoning: 'NEWS2 score contribution: 3 pts — severe tachypnea' },
+        { parameter: 'Systolic BP', value: '88 mmHg', status: 'critical', reasoning: 'NEWS2 score contribution: 3 pts — hypotension' },
+        { parameter: 'SpO2', value: '91%', status: 'critical', reasoning: 'NEWS2 score contribution: 3 pts — hypoxia' },
+        { parameter: 'Temperature', value: '38.9°C', status: 'abnormal', reasoning: 'NEWS2 score contribution: 1 pt — low-grade fever' },
+        { parameter: 'Creatinine', value: '2.8 mg/dL', status: 'critical', reasoning: 'Severe AKI — creatinine >3.0 mg/dL indicates likely Stage 3 AKI' },
+        { parameter: 'WBC', value: '18.4 10^3/uL', status: 'abnormal', reasoning: 'Leukocytosis — infection or inflammatory process likely' },
+        { parameter: 'CRP', value: '142 mg/L', status: 'critical', reasoning: 'Severely elevated CRP consistent with sepsis' },
+        { parameter: 'Potassium', value: '5.8 mEq/L', status: 'abnormal', reasoning: 'Hyperkalemia — EKG monitoring recommended' },
+      ],
+      crossPatternAlerts: [
+        '⚠️ SEPSIS PATTERN: Concurrent tachycardia, tachypnea, leukocytosis, and elevated CRP — meets SIRS criteria. Sepsis workup urgently indicated.',
+        '⚠️ CARDIORENAL PATTERN: Hypotension combined with elevated creatinine suggests cardiorenal syndrome or hypovolemic AKI.',
+        '⚠️ RESPIRATORY-HEMODYNAMIC COUPLING: Low SpO2 with compensatory tachypnea and tachycardia — patient is actively compensating; decompensation risk is high.',
+      ],
+      sharpEnvelope: {
+        specVersion: '1.0',
+        contextType: 'deterioration-alert',
+        patientRef: { resourceType: 'Patient', id: 'demo-critical', fhirBaseUrl: 'https://hapi.fhir.org/baseR4' },
+        sessionContext: { sessionId: 'session-demo-001', initiatingAgent: 'silent-deterioration-mcp' },
+        propagationRules: { forwardToAgents: true, requiresAcknowledgment: true, ttlMinutes: 60 }
+      },
+      conditions: ['Hypertension', 'Type 2 Diabetes', 'CKD Stage 2'],
+      age: 67, gender: 'male'
+    },
+    'demo-high': {
+      patientId: 'demo-high',
+      patientName: 'Maria Santos',
+      riskScore: 62,
+      riskLevel: 'HIGH',
+      news2Score: 7,
+      llmNarrative: 'Ms. Santos shows an evolving cardiorenal pattern. Her borderline hypotension (SBP 98) combined with rising creatinine (2.1 mg/dL) in the context of known heart failure suggests either decompensated cardiac output or volume depletion. The moderate leukocytosis and elevated CRP may indicate an infectious trigger. Each parameter is individually concerning; together they form a high-risk clinical picture requiring urgent evaluation.',
+      differentialDiagnoses: ['Cardiorenal syndrome type 1 (acute-on-chronic)', 'Volume depletion with pre-renal AKI', 'Occult infection triggering cardiac decompensation'],
+      urgencyJustification: 'NEWS2 of 7 and cardiorenal pattern detection places this patient at elevated 30-day mortality risk.',
+      recommendedActions: [
+        '⚠️ URGENT: Bedside clinical review within 30 minutes',
+        'Strict fluid balance monitoring every 1 hour',
+        'Consider nephrology and cardiology consult',
+        'Hold nephrotoxic medications (NSAIDs, contrast agents)',
+        'Repeat vitals every 15-30 minutes',
+        'Echocardiogram if not recent'
+      ],
+      clinicalSignals: [
+        { parameter: 'Heart Rate', value: '102 bpm', status: 'abnormal', reasoning: 'Mild tachycardia — NEWS2: 1 pt' },
+        { parameter: 'Respiratory Rate', value: '21 breaths/min', status: 'borderline', reasoning: 'Borderline elevated — NEWS2: 2 pts' },
+        { parameter: 'Systolic BP', value: '98 mmHg', status: 'abnormal', reasoning: 'Low-normal BP — NEWS2: 2 pts' },
+        { parameter: 'SpO2', value: '94%', status: 'borderline', reasoning: 'Borderline SpO2 — NEWS2: 1 pt' },
+        { parameter: 'Creatinine', value: '2.1 mg/dL', status: 'abnormal', reasoning: 'Elevated creatinine suggests AKI — monitor urine output' },
+        { parameter: 'CRP', value: '58 mg/L', status: 'abnormal', reasoning: 'Elevated CRP indicates significant systemic inflammation' },
+      ],
+      crossPatternAlerts: [
+        '⚠️ CARDIORENAL PATTERN: Hypotension combined with elevated creatinine suggests cardiorenal syndrome.',
+      ],
+      sharpEnvelope: {
+        specVersion: '1.0',
+        contextType: 'deterioration-alert',
+        patientRef: { resourceType: 'Patient', id: 'demo-high', fhirBaseUrl: 'https://hapi.fhir.org/baseR4' },
+        sessionContext: { sessionId: 'session-demo-002', initiatingAgent: 'silent-deterioration-mcp' },
+        propagationRules: { forwardToAgents: true, requiresAcknowledgment: true, ttlMinutes: 60 }
+      },
+      conditions: ['Congestive Heart Failure', 'CKD Stage 3', 'Atrial Fibrillation'],
+      age: 72, gender: 'female'
+    },
+    'demo-moderate': {
+      patientId: 'demo-moderate',
+      patientName: 'David Chen',
+      riskScore: 38,
+      riskLevel: 'MODERATE',
+      news2Score: 4,
+      llmNarrative: 'Mr. Chen shows mild physiological derangement with a mildly elevated heart rate and slightly reduced SpO2. The individually borderline values do not yet meet criteria for urgent escalation, but the trend over the past 6 hours warrants increased monitoring frequency. His known COPD makes SpO2 interpretation context-dependent — baseline SpO2 should be confirmed.',
+      differentialDiagnoses: ['COPD exacerbation (mild)', 'Healthcare-associated pneumonia (early)', 'Pulmonary embolism (low probability)'],
+      urgencyJustification: 'NEWS2 of 4 warrants increased monitoring; no single critical parameter but aggregate trend is concerning.',
+      recommendedActions: [
+        'Increase vital sign monitoring to every 2 hours',
+        'Confirm baseline SpO2 for COPD patient',
+        'Chest X-ray if not done in last 24 hours',
+        'Reassess NEWS2 score in 4 hours'
+      ],
+      clinicalSignals: [
+        { parameter: 'Heart Rate', value: '94 bpm', status: 'borderline', reasoning: 'Borderline — NEWS2: 1 pt' },
+        { parameter: 'SpO2', value: '94%', status: 'borderline', reasoning: 'Borderline for non-COPD; within range for known COPD patient' },
+        { parameter: 'Respiratory Rate', value: '19 breaths/min', status: 'normal', reasoning: 'Normal range' },
+        { parameter: 'Systolic BP', value: '118 mmHg', status: 'normal', reasoning: 'Normal' },
+      ],
+      crossPatternAlerts: [],
+      sharpEnvelope: {
+        specVersion: '1.0',
+        contextType: 'deterioration-alert',
+        patientRef: { resourceType: 'Patient', id: 'demo-moderate', fhirBaseUrl: 'https://hapi.fhir.org/baseR4' },
+        sessionContext: { sessionId: 'session-demo-003', initiatingAgent: 'silent-deterioration-mcp' },
+        propagationRules: { forwardToAgents: false, requiresAcknowledgment: false, ttlMinutes: 60 }
+      },
+      conditions: ['COPD', 'Hypertension'],
+      age: 58, gender: 'male'
+    },
+    'demo-low': {
+      patientId: 'demo-low',
+      patientName: 'Sarah Williams',
+      riskScore: 8,
+      riskLevel: 'LOW',
+      news2Score: 0,
+      llmNarrative: 'Ms. Williams is physiologically stable with all vital signs within normal parameters and no significant laboratory abnormalities. NEWS2 score of 0 indicates low risk for deterioration. Continue routine monitoring as per ward protocol.',
+      differentialDiagnoses: ['No acute pathology identified'],
+      urgencyJustification: 'All parameters within normal range, NEWS2 score 0 — routine monitoring appropriate.',
+      recommendedActions: [
+        'Continue routine 4-hourly observations',
+        'Reassess NEWS2 at next scheduled review'
+      ],
+      clinicalSignals: [
+        { parameter: 'Heart Rate', value: '72 bpm', status: 'normal', reasoning: 'Normal sinus rhythm' },
+        { parameter: 'SpO2', value: '98%', status: 'normal', reasoning: 'Normal oxygen saturation' },
+        { parameter: 'Respiratory Rate', value: '14 breaths/min', status: 'normal', reasoning: 'Normal' },
+        { parameter: 'Systolic BP', value: '122 mmHg', status: 'normal', reasoning: 'Normal' },
+        { parameter: 'Temperature', value: '36.8°C', status: 'normal', reasoning: 'Afebrile' },
+      ],
+      crossPatternAlerts: [],
+      sharpEnvelope: {
+        specVersion: '1.0',
+        contextType: 'deterioration-alert',
+        patientRef: { resourceType: 'Patient', id: 'demo-low', fhirBaseUrl: 'https://hapi.fhir.org/baseR4' },
+        sessionContext: { sessionId: 'session-demo-004', initiatingAgent: 'silent-deterioration-mcp' },
+        propagationRules: { forwardToAgents: false, requiresAcknowledgment: false, ttlMinutes: 60 }
+      },
+      conditions: ['Post-op Day 2 (appendectomy)'],
+      age: 34, gender: 'female'
+    }
+  };
+
+  let patients = {};
+  let activePatientId = null;
+
+  const RISK_COLORS = {
+    CRITICAL: '#ff4757',
+    HIGH: '#ff6b35',
+    MODERATE: '#ffa502',
+    LOW: '#2ed573'
+  };
+
+  function getScoreColor(score) {
+    if (score >= 75) return '#ff4757';
+    if (score >= 50) return '#ff6b35';
+    if (score >= 25) return '#ffa502';
+    return '#2ed573';
+  }
+
+  function loadDemo(patientId, level) {
+    const data = DEMO_PATIENTS[patientId];
+    if (!data) return;
+    addPatientToList(patientId, data);
+    renderPatientDetail(patientId, data);
+  }
+
+  function addPatientToList(patientId, data) {
+    patients[patientId] = data;
+    renderPatientList();
+  }
+
+  function renderPatientList() {
+    const list = document.getElementById('patientList');
+    const ids = Object.keys(patients);
+    if (ids.length === 0) {
+      list.innerHTML = '<div style="padding:24px 20px;text-align:center;color:var(--text3);font-family:var(--mono);font-size:11px;line-height:1.7;">No patients assessed yet</div>';
+      return;
+    }
+    list.innerHTML = ids.map(id => {
+      const p = patients[id];
+      const color = RISK_COLORS[p.riskLevel] || '#8b949e';
+      const isActive = id === activePatientId;
+      return `
+        <div class="patient-card ${isActive ? 'active' : ''}" onclick="renderPatientDetail('${id}', patients['${id}'])">
+          <div class="patient-card-top">
+            <span class="patient-name">${p.patientName}</span>
+            <span class="risk-badge risk-${p.riskLevel}">${p.riskLevel}</span>
+          </div>
+          <div class="patient-meta">
+            <span>ID: ${p.patientId}</span>
+            <span>NEWS2: ${p.news2Score}</span>
+            <span>Score: ${p.riskScore}/100</span>
+          </div>
+          <div class="score-bar-wrap">
+            <div class="score-bar" style="width:${p.riskScore}%;background:${color};"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderPatientDetail(patientId, data) {
+    activePatientId = patientId;
+    renderPatientList();
+
+    document.getElementById('emptyState').style.display = 'none';
+    const view = document.getElementById('patientView');
+    view.style.display = 'flex';
+
+    const color = RISK_COLORS[data.riskLevel];
+    const news2Pct = Math.min((data.news2Score / 20) * 100, 100);
+
+    // Alert banner for critical
+    const banner = document.getElementById('alertBanner');
+    if (data.riskLevel === 'CRITICAL') {
+      banner.style.display = 'block';
+      banner.innerHTML = `🚨 <strong>CRITICAL ALERT</strong> — ${data.patientName} requires immediate clinical review. ${data.crossPatternAlerts.length} cross-parameter pattern(s) detected.`;
+    } else if (data.riskLevel === 'HIGH') {
+      banner.style.display = 'block';
+      banner.style.borderLeftColor = RISK_COLORS.HIGH;
+      banner.style.background = 'rgba(255,107,53,0.08)';
+      banner.innerHTML = `⚠️ <strong>HIGH RISK</strong> — ${data.patientName} requires urgent review within 30 minutes.`;
+    } else {
+      banner.style.display = 'none';
+    }
+
+    // Header
+    document.getElementById('contentHeader').innerHTML = `
+      <div class="patient-headline">
+        <div class="patient-full-name">${data.patientName}</div>
+        <div class="patient-details-row">
+          <span class="detail-chip">ID: ${data.patientId}</span>
+          <span class="detail-chip">${data.age}yo · ${data.gender}</span>
+          <span class="detail-chip">${(data.conditions || []).join(' · ')}</span>
+        </div>
+        <div class="tech-tags">
+          <span class="tech-tag tag-fhir">FHIR R4</span>
+          <span class="tech-tag tag-news2">NEWS2</span>
+          <span class="tech-tag tag-ai">Grok LLM</span>
+          <span class="tech-tag tag-sharp">SHARP</span>
+          <span class="tech-tag" style="background:rgba(139,92,246,0.1);color:#a78bfa;border:1px solid rgba(139,92,246,0.3);">A2A READY</span>
+        </div>
+      </div>
+      <div class="risk-meter">
+        <div class="risk-score-big" style="color:${color}">${data.riskScore}</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text3);">/ 100</div>
+        <div class="risk-label-big" style="color:${color}">${data.riskLevel}</div>
+      </div>
+    `;
+
+    // Body panels
+    const abnormalSignals = data.clinicalSignals.filter(s => s.status !== 'normal');
+    const normalSignals = data.clinicalSignals.filter(s => s.status === 'normal');
+
+    document.getElementById('contentBody').innerHTML = `
+
+      <!-- NEWS2 + AI Reasoning -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">NEWS2 Score</span>
+          <span class="panel-tag tag-news2">NHS VALIDATED</span>
+        </div>
+        <div class="panel-body">
+          <div class="news2-display">
+            <div class="news2-number" style="color:${color}">${data.news2Score}</div>
+            <div class="news2-scale">
+              <div class="news2-label">${
+                data.news2Score >= 7 ? '🔴 Urgent Response Required' :
+                data.news2Score >= 5 ? '🟠 Increased Monitoring' :
+                data.news2Score >= 3 ? '🟡 Ward-Level Review' :
+                '🟢 Routine Monitoring'
+              }</div>
+              <div class="news2-bar-track">
+                <div class="news2-bar-fill" style="width:${news2Pct}%;background:${color}"></div>
+              </div>
+              <div class="news2-markers"><span>0</span><span>5</span><span>10</span><span>15</span><span>20+</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LLM Narrative -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">AI Clinical Reasoning</span>
+          <span class="panel-tag tag-ai">GROK LLM</span>
+        </div>
+        <div class="panel-body">
+          <div class="narrative-text">${data.llmNarrative}</div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Differential Diagnoses</div>
+          <div class="differential-list">
+            ${data.differentialDiagnoses.map((d, i) => `
+              <div class="diff-item">
+                <span class="diff-num">${i + 1}.</span>
+                <span>${d}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+
+      <!-- Cross-Pattern Alerts -->
+      ${data.crossPatternAlerts.length > 0 ? `
+      <div class="panel full-width">
+        <div class="panel-header">
+          <span class="panel-title">Cross-Parameter AI Patterns (${data.crossPatternAlerts.length})</span>
+          <span class="panel-tag tag-ai">AI-DETECTED · NOT RULE-BASED</span>
+        </div>
+        <div class="panel-body">
+          <div class="pattern-list">
+            ${data.crossPatternAlerts.map(p => `<div class="pattern-item">${p}</div>`).join('')}
+          </div>
+        </div>
+      </div>
+      ` : ''}
+
+      <!-- Clinical Signals -->
+      <div class="panel full-width">
+        <div class="panel-header">
+          <span class="panel-title">Clinical Signals (${data.clinicalSignals.length} parameters)</span>
+          <span class="panel-tag tag-fhir">FHIR OBSERVATIONS</span>
+        </div>
+        <div class="panel-body">
+          <div class="signals-grid">
+            ${data.clinicalSignals.map(s => {
+              const col = s.status === 'critical' ? '#ff4757' : s.status === 'abnormal' ? '#ff6b35' : s.status === 'borderline' ? '#ffa502' : '#2ed573';
+              return `
+                <div class="signal-row ${s.status}">
+                  <div class="signal-name">${s.parameter}</div>
+                  <div class="signal-value" style="color:${col}">${s.value}</div>
+                  <div style="flex:1;font-size:11px;color:var(--text3);padding: 0 8px;">${s.reasoning}</div>
+                  <div class="signal-status" style="background:${col}22;color:${col};border:1px solid ${col}66">${s.status}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+
+      <!-- Recommended Actions -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Recommended Actions</span>
+          <span class="panel-tag tag-ai">AI-GENERATED</span>
+        </div>
+        <div class="panel-body">
+          <div class="actions-list">
+            ${data.recommendedActions.map((a, i) => `
+              <div class="action-item">
+                <span class="action-idx">${i + 1}.</span>
+                <span>${a}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+
+      <!-- SHARP Context -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">SHARP Context Envelope</span>
+          <span class="panel-tag tag-sharp">A2A READY</span>
+        </div>
+        <div class="panel-body">
+          <div class="sharp-grid">
+            <div class="sharp-field">
+              <div class="sharp-key">Spec Version</div>
+              <div class="sharp-val">${data.sharpEnvelope.specVersion}</div>
+            </div>
+            <div class="sharp-field">
+              <div class="sharp-key">Context Type</div>
+              <div class="sharp-val">${data.sharpEnvelope.contextType}</div>
+            </div>
+            <div class="sharp-field">
+              <div class="sharp-key">Patient FHIR Ref</div>
+              <div class="sharp-val">Patient/${data.sharpEnvelope.patientRef.id}</div>
+            </div>
+            <div class="sharp-field">
+              <div class="sharp-key">Session ID</div>
+              <div class="sharp-val">${data.sharpEnvelope.sessionContext.sessionId}</div>
+            </div>
+            <div class="sharp-field">
+              <div class="sharp-key">Propagate to Agents</div>
+              <div class="sharp-val" style="color:${data.sharpEnvelope.propagationRules.forwardToAgents ? 'var(--low)' : 'var(--text3)'}">
+                ${data.sharpEnvelope.propagationRules.forwardToAgents ? '✓ YES' : '✗ NO'}
+              </div>
+            </div>
+            <div class="sharp-field">
+              <div class="sharp-key">Requires ACK</div>
+              <div class="sharp-val" style="color:${data.sharpEnvelope.propagationRules.requiresAcknowledgment ? 'var(--critical)' : 'var(--text3)'}">
+                ${data.sharpEnvelope.propagationRules.requiresAcknowledgment ? '⚠ YES' : 'NO'}
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:12px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:10px;color:var(--text2);line-height:1.6;">
+            Initiating Agent: ${data.sharpEnvelope.sessionContext.initiatingAgent}<br>
+            FHIR Base: ${data.sharpEnvelope.patientRef.fhirBaseUrl}<br>
+            TTL: ${data.sharpEnvelope.propagationRules.ttlMinutes} minutes
+          </div>
+        </div>
+      </div>
+
+    `;
+  }
+
+  async function assessPatient() {
+    const input = document.getElementById('patientIdInput');
+    const patientId = input.value.trim();
+    if (!patientId) return;
+
+    const btn = document.getElementById('assessBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    // Show loading in list
+    const list = document.getElementById('patientList');
+    const loadingEl = document.createElement('div');
+    loadingEl.className = 'loading-card';
+    loadingEl.innerHTML = `
+      <div class="skeleton" style="width:60%"></div>
+      <div class="skeleton" style="width:40%"></div>
+      <div class="skeleton" style="width:80%;height:3px;margin-top:4px"></div>
+    `;
+    list.prepend(loadingEl);
+
+    // Simulate MCP call (in real deployment, this calls the actual MCP server via HTTP wrapper)
+    await new Promise(r => setTimeout(r, 1800));
+
+    // For demo purposes, generate a random risk assessment
+    const levels = ['CRITICAL', 'HIGH', 'MODERATE', 'LOW'];
+    const level = levels[Math.floor(Math.random() * levels.length)];
+    const demoKey = `demo-${level.toLowerCase()}`;
+    const template = DEMO_PATIENTS[demoKey];
+
+    const fakeData = {
+      ...template,
+      patientId,
+      patientName: `Patient #${patientId}`,
+      sharpEnvelope: {
+        ...template.sharpEnvelope,
+        patientRef: { ...template.sharpEnvelope.patientRef, id: patientId },
+        sessionContext: { ...template.sharpEnvelope.sessionContext, sessionId: `session-${Date.now()}` }
+      }
+    };
+
+    loadingEl.remove();
+    addPatientToList(patientId, fakeData);
+    renderPatientDetail(patientId, fakeData);
+
+    btn.disabled = false;
+    btn.innerHTML = 'ASSESS';
+    input.value = '';
+  }
+
+  async function scanWard() {
+    const btn = document.getElementById('scanBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ SCANNING...';
+
+    // Load all 4 demo patients with staggered timing for visual effect
+    const demoIds = ['demo-critical', 'demo-high', 'demo-moderate', 'demo-low'];
+    for (const id of demoIds) {
+      await new Promise(r => setTimeout(r, 400));
+      addPatientToList(id, DEMO_PATIENTS[id]);
+    }
+
+    // Auto-show the highest risk patient
+    renderPatientDetail('demo-critical', DEMO_PATIENTS['demo-critical']);
+
+    btn.disabled = false;
+    btn.textContent = '⚡ SCAN WARD';
+  }
+
+  // Allow Enter key in input
+  document.getElementById('patientIdInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') assessPatient();
+  });
+</script>
+</body>
+</html>
