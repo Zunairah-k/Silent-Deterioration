@@ -363,6 +363,7 @@ async function main() {
           req.method === "GET"
         ) {
           try {
+            res.setHeader("X-Accel-Buffering", "no"); 
             const transport =
               new SSEServerTransport(
                 "/messages",
@@ -440,7 +441,10 @@ async function main() {
       }
     );
 
-    httpServer.listen(port, () => {
+    httpServer.keepAliveTimeout = 0;
+httpServer.headersTimeout = 0;
+httpServer.timeout = 0;
+httpServer.listen(port, () => {
       console.log("");
       console.log(
         "🏥 Silent Deterioration MCP Server running"
