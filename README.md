@@ -146,7 +146,7 @@ To connect to the Prompt Opinion platform, expose the server via HTTP:
 node dist/index.js --http --port 3001
 
 # Expose publicly (development)
-npx cloudflare-tunnel --url http://localhost:3001
+D:\ngrok.exe http 3001
 ```
 
 Register the tunnel URL as your MCP endpoint in the Prompt Opinion marketplace.
